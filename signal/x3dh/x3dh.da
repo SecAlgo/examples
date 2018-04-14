@@ -1,0 +1,97 @@
+import sys
+from sa.secalgoB import keygen, encrypt, decrypt, sign, verify, hkdf, dh
+
+ONETIME_PREKEYS = 5
+
+class RoleA(process):
+    def setup(B, S):
+        self.IKP_A, self.IK_A = keygen('EdDSA', curve = 'X25519')
+        
+    def run():
+        keybundle = fetch_prekey_bundle(B)
+        if verify_keybundle(keybundle):
+            secret = generate_shared_secret(keybundle)
+
+    def fetch_prekey_bundle(b):
+        send(('request', b), to = S)
+        await(some(received(('reply', keybundle_b), from_ = S)))
+        return keybundle_b
+
+    def verify_keybundle(kb):
+        return verify((kb[1], kb[2]), key = kb[0])
+
+    def KDF(km):
+        F = b'\xff' * 32
+        s = b'\0' * 32
+        i = b'x3dh info'
+        return hkdf(km, length = 32, salt = salt, info = i)
+
+    def generate_shared_secret(kb):
+        EKP_A, EPK_A = keygen('EdDSA', curve = 'X25519')
+        DH1 = dh(self.IKP_A, kb[1]) # IK_A, SPK_B
+        DH2 = dh(EKP_A, kb[0]) # EK_A, IK_B
+        DH3 = dh(EKP_A, kb[1]) # EK_A, SPK_B
+        DHF = DH1 + DH2 + DH3
+        if len(kb) > 3: #one-time key present
+            DH4 = dh(EKP_A, kb[3]) # EK_A, OPK_B
+            DHF = DHF + DH4
+        return kdf(DHF)
+            
+
+class RoleB(process):
+    def setup(A, S):
+        self.IKP_B, self.IK_B = keygen('EdDSA', curve = 'X25519')
+        self.SKP_B, self.SPK_B = keygen('EdDSA', curve = 'X25519')
+        self.onetime_private_prekeys = set()
+        self.oldSKP_B = None
+        self.maxKeyID = 0
+        
+    def run():
+        publish_keys()
+
+    def update_signed_prekey():
+        self.oldSKP_B = self.SKP_B
+        self.SKP_B, self.SPK_B = keygen('EdDSA', curve = 'X25519')
+
+    def generate_onetime_prekeys():
+        onetime_public_prekeys = set()
+        self.onetime_private_prekeys = set()
+        for i in range(ONETIME_PREKEYS):
+            new_kp, new_pk = keygen('EdDSA', curve = 'X25519')
+            onetime_private_prekeys.add(('Bob' + str(self.maxKeyID + i), new_kp))
+            onetime_public_prekeys.add(('Bob' + str(self.maxKeyID + i), new_pk))
+        self.maxKeyID = self.maxKeyID + i
+        return onetime_public_prekeys
+        
+        
+    def publish_keys():
+        onetime_prekeys = generate_onetime_prekeys()
+        send(('publish', (self.IK_B, self.SPK_B,
+                          sign(self.SPK_B, key = self.IKP_B),
+                          onetime_prekeys)), to = S)
+        
+
+class RoleS(process):
+    def setup():
+        self.keybundles = dict()
+
+    def run():
+        await(False)
+
+    def receive(msg=('publish', keybundle), from_ = B):
+        self.keybundles[B] = keybundle
+
+    def receive(msg=('request', B), from_ = A):
+        IK_B, SPK_B, sig_B, onetime_prekeys_B = self.keybundles[B]
+        send(('reply', (IK_B, SPK_B, sig_B, onetime_prekeys_B.pop())), to = A)
+    
+def main():
+    S = new(RoleS)
+    B = new(RoleB)
+    A = new(RoleA)
+    setup(S, ())
+    setup(B, (A, S))
+    setup(A, (B, S))
+    start(S)
+    start(B)
+    start(A)
