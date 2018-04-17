@@ -3,6 +3,7 @@ from nacl.encoding import HexEncoder
 from nacl.public import Box
 from Cryptodome.Protocol.KDF import HKDF
 from Cryptodome.Hash import SHA256
+import sa.secalgoB as SA
 
 X25519 = B'\0'
 
@@ -36,4 +37,29 @@ def kdf(KM):
     return HKDF(KM, salt = s, key_len = 32,
                 hashmod = SHA256.new(), context = info)
 
+def encrypt(k, pt, ad):
+    kd_out = HKDF(k, salt = (b'\0' * 32), key_len = 80,
+                  hashmod = SHA256.new(), context = b'kdf_encrypt_info')
+    enc_key = SA.keygen('shared', key_mat = kd_out[:32])
+    auth_key = SA.keygen('mac', key_mat = kd_out[32:64])
+    kd_iv = kd_out[64:]
+    ct = SA.encrypt(pt, key = enc_key, iv = kd_iv)
+    data, mac = SA.sign(ad + ct, key = auth_key)
+    return ct + mac
 
+def decrypt(k, ct, ad):
+    kd_out = HKDF(k, salt = (b'\0' * 32), key_len = 80,
+                  hashmod = SHA256.new(), context = b'kdf_encrypt_info')
+    enc_key = SA.keygen('shared', key_mat = kd_out[:32])
+    auth_key = SA.keygen('mac', key_mat = kd_out[32:64])
+    kd_iv = kd_out[64:]
+    ct_iv = ct[:16]
+    ct_mac = ct[-32:]
+    ct_ct = ct[:-32]
+    assert kd_iv == ct_iv
+    verdict = SA.verify((b'\0' + ad + ct_ct, ct_mac), key = auth_key)
+    if verdict != None:
+        return SA.decrypt(ct_ct, key = enc_key)
+    else:
+        raise Exception
+    

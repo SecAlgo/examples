@@ -1,5 +1,4 @@
 import sys
-import sa.secalgoB as SA
 from x3dh_lib import keygen, encrypt, decrypt, sign
 from x3dh_lib import verify, kdf, dh, encode, decode
 
@@ -13,11 +12,11 @@ class RoleA(process):
         keybundle = fetch_prekey_bundle(B)
         if verify_keybundle(keybundle):
             SK, EKP_A = generate_shared_secret(keybundle)
-            AD = encode(self.IK_A) + encode(keybundle[0])
+            AD = encode(self.IK_A) + keybundle[0]
             output(SK)
             init_message = b'I am a secret'
             send(('init', (encode(self.IK_A), encode(EKP_A),
-                           keybundle[3][0], encrypt(init_message, SK))), to = B)
+                           keybundle[3][0], encrypt(SK, init_message, AD))), to = B)
 
     def fetch_prekey_bundle(b):
         send(('request', b), to = S)
@@ -70,7 +69,7 @@ class RoleB(process):
                           onetime_prekeys)), to = S)
 
     def generate_shared_secret(ib):
-        OKP_B = self.onetime_private_keys[ib[2]]
+        OKP_B = self.onetime_private_prekeys[ib[2]]
         DH1 = dh(self.SKP_B, decode(ib[0]))
         DH2 = dh(self.IKP_B, decode(ib[1]))
         DH3 = dh(self.SKP_B, decode(ib[1]))
@@ -80,8 +79,10 @@ class RoleB(process):
 
     def receive(msg=('init', initBundle), from_ = A):
         SK = generate_shared_secret(initBundle)
+        output(SK)
         AD = initBundle[0] + encode(self.IK_B)
-        init_message = decrypt(initBundle[3], SK)
+        init_message = decrypt(SK, initBundle[3], AD)
+        output(init_message)
 
 class RoleS(process):
     def setup():
