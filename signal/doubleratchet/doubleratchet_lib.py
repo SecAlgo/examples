@@ -1,4 +1,4 @@
-from doubleratchet_ext import (MAX_SKIP, GENERATE_DH, DH, KDF_RK, KDF_CK,
+from .doubleratchet_ext import (MAX_SKIP, GENERATE_DH, DH, KDF_RK, KDF_CK,
                                ENCRYPT, DECRYPT, HEADER, CONCAT)
 
 # Sources:
@@ -19,7 +19,7 @@ from doubleratchet_ext import (MAX_SKIP, GENERATE_DH, DH, KDF_RK, KDF_CK,
 # that Alice will send the first message. [1], p. 19
 def RatchetInitAlice(state, SK, bob_dh_public_key):
     state.DHs = GENERATE_DH()
-    state.DHr = bob_dh_public_key.public_bytes()
+    state.DHr = bob_dh_public_key
     state.RK, state.CKs = KDF_RK(SK, DH(state.DHs, state.DHr))
     state.CKr = None
     state.Ns = 0

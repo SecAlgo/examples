@@ -1,10 +1,13 @@
 from sa.secalgoB import keygen, encrypt, decrypt, sign, verify
+from nacl.signing import SigningKey, VerifyKey
+from nacl.encoding import HexEncoder
+from nacl.public import Box
 from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
-from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PublicKey
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
-from cryptography.hazmat.primitives.hmac import HMAC
+from cryptography.hazmat.primitives import hashes
+#from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
+#from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PublicKey
+#from cryptography.hazmat.primitives.hmac import HMAC
 
 # Sources:
 # [1] - "The Double Ratchet Algorithm", Trevor Perrin, Moxie Marlinspike.
@@ -43,7 +46,7 @@ class state():
 # message for which this is the header, "n". [1], p. 18-19
 class Header():
     def __init__(self, dh_pair, pn, n):
-        self.dh = dh_pair.public_key().public_bytes() # Ratchet public key
+        self.dh = dh_pair.verify_key.encode(encoder = HexEncoder) # Ratchet public key
         self.pn = pn # Number of messages in previous sending chain
         self.n = n # Message number for this message
     #end def __init__()
@@ -67,8 +70,8 @@ class Header():
 # This function is recommended to generate a key pair based on the Curve25519
 # or Curve448 elliptic curves. [1], p. 30.
 def GENERATE_DH():
-    #keygen('ECC', curve = 'X21599')
-    return X25519PrivateKey.generate()
+    #keygen('ECC', curve = '25519')
+    return SigningKey.generate()
 #end def GENERATE_DH()
 
 # DH(dh_pair, dh_pub): Returns the output from the Diffie-Hellman calculation
@@ -79,7 +82,10 @@ def GENERATE_DH():
 # function as defined in RFC 7748. There is no need to check for invalid public
 # keys. [1], p. 30.
 def DH(dh_pair, dh_pub):
-    return dh_pair.exchange(X25519PublicKey.from_public_bytes(dh_pub))
+    dh_pairM = dh_pair.to_curve25519_private_key()
+    dh_pubM = VerifyKey(dh_pub, encoder = HexEncoder).to_curve25519_public_key()
+    b = Box(dh_pairM, dh_pubM)
+    return b.shared_key()
 #end def DH()
 
 # KDF_RK(rk, dh_out): Returns a pair (32-byte root key, 32-byte chain key) as
@@ -110,12 +116,9 @@ def KDF_RK(rk, dh_out):
 # produce the message key, and a single byte 0x02 as input to produce the next
 # chain key. [1], p. 30
 def KDF_CK(ck):
-    ck_h = HMAC(ck, hashes.SHA256(), backend = default_backend())
-    ck_h.update(b'\1')
-    chain_key = ck_h.finalize()
-    mk_h = HMAC(ck, hashes.SHA256(), backend = default_backend())
-    mk_h.update(b'\2')
-    message_key = mk_h.finalize()
+    mac_key = keygen('mac', key_mat = ck)
+    chain_key = sign(b'\1', key = mac_key)[1]
+    message_key = sign(b'\2', key = mac_key)[1]
     return chain_key, message_key
 #end def KDF_CK()
 
@@ -167,8 +170,7 @@ def DECRYPT(mk, ciphertext, associated_data):
               salt = (b'\0' * 32),
               info = b'kdf_encrypt_info',
               backend = default_backend())
-    kd_out = kd.derive(mk)
-    
+    kd_out = kd.derive(mk)    
     enc_key = keygen('shared', key_mat = kd_out[:32])
     auth_key = keygen('mac', key_mat = kd_out[32:64])
     kd_iv = kd_out[64:]
