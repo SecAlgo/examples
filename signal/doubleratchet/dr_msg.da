@@ -1,12 +1,13 @@
 import sys
 from sa.secalgoB import keygen
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PublicKey
-import doubleratchet as DR
+import doubleratchet_ext as EXT
+import doubleratchet_lib as DR
 
 class roleA(process):
     def setup(B, rounds, SK, AD):
         self.bob_init_pubk = None
-        self.state = DR.state()
+        self.state = EXT.state()
         self.recv_set = set()
 
     def run():
@@ -17,7 +18,7 @@ class roleA(process):
             msg = 'This is message ' + str(r)
             send(('msg', r, DR.RatchetEncrypt(self.state, msg, self.AD)), to = B)
             await(r in self.recv_set)
-
+    
     def receive(msg=('rep', r, (msg_header, msg_ct)), from_ = B):
         msg_pt = DR.RatchetDecrypt(self.state, msg_header, msg_ct, self.AD)
         output(msg_pt)
@@ -29,11 +30,11 @@ class roleA(process):
 class roleB(process):
     def setup(A, rounds, SK, AD):
         self.bob_init_key_pair = None
-        self.state = DR.state()
+        self.state = EXT.state()
         self.recv_count = 0
               
     def run():
-        self.bob_init_key_pair = DR.GENERATE_DH()
+        self.bob_init_key_pair = EXT.GENERATE_DH()
         DR.RatchetInitBob(self.state, self.SK, self.bob_init_key_pair)
         send(('pubk_init', self.bob_init_key_pair.public_key().public_bytes()), to = A)
         await(self.recv_count == rounds)
@@ -44,15 +45,14 @@ class roleB(process):
         self.recv_count += 1
         rep = 'This is reply ' + str(r)
         send(('rep', r, DR.RatchetEncrypt(self.state, rep, self.AD)), to = A)
-        #send(('rep', r), to = A)
 
 def main():
     rounds = int(sys.argv[1]) if len(sys.argv) > 1 else 10
-    SK = keygen('random', 32)
-    AD = keygen('random', 32)
-    A = new(roleA)
-    B = new(roleB)
-    setup(A, (B, rounds, SK, AD))
-    setup(B, (A, rounds, SK, AD))
-    start(B)
-    start(A)
+    SK = keygen('random', 32) # shared secret key established somehow
+    AD = keygen('random', 32) # simulated associated data established somehow
+    A = new(roleA) # create sender
+    B = new(roleB) # create receiver
+    setup(A, (B, rounds, SK, AD)) # setup sender
+    setup(B, (A, rounds, SK, AD)) # setup receiver
+    start(B) # start receiver
+    start(A) # start sender
