@@ -1,3 +1,4 @@
+from nacl.encoding import HexEncoder
 import doubleratchet_ext as EXT
 import doubleratchet_lib as DR
 from sa.secalgoB import keygen
@@ -17,7 +18,8 @@ def main():
     SK = keygen('random', 32) # initial shared secret
     AD = keygen('random', 32) # random simulated AD value
     bob_init_key_pair = EXT.GENERATE_DH() # generate Bob's initial ratchet key pair
-    bob_init_pubk = bob_init_key_pair.public_key() # get public part
+    # get public part
+    bob_init_pubk = bob_init_key_pair.verify_key.encode(encoder = HexEncoder) 
     alice_state = EXT.state() # create sender state
     bob_state = EXT.state() # create receiver state
     DR.RatchetInitAlice(alice_state, SK, bob_init_pubk) # set-up sender state

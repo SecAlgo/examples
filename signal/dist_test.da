@@ -1,12 +1,12 @@
 import sys
-import doubleratchet.doubleratchet_lib as DR
-import doubleratchet.doubleratchet_ext as EXT
-import x3dh.x3dh_lib as X3DH
+import doubleratchet_lib as DR
+import doubleratchet_ext as EXT
+import x3dh_lib as X3DH
 
 ONETIME_PREKEYS = 5
 
 class RoleA(process):
-    def setup(B, S):
+    def setup(B, S, rounds):
         self.IKP_A, self.IK_A = X3DH.keygen()
         self.state_A = EXT.state()
 
@@ -38,15 +38,23 @@ class RoleA(process):
             init_message = b'This is a secret'
             send(('init', (X3DH.encode(self.IK_A), X3DH.encode(EPK_A), lbl,
                            DR.RatchetEncrypt(self.state_A, init_message, AD))), to = B)
+            for r in range(rounds):
+                msg = 'This is message ' + str(r)
+                send(('msg', r, DR.RatchetEncrypt(self.state_A, msg, AD)), to = B)
+                await(some(received(('msg-rep', q, (rep_hdr, rep_ct)), from_ = _B),
+                           has = (q >= r)))
+                rep_pt = DR.RatchetDecrypt(self.state_A, rep_hdr, rep_ct, AD)
+                output(rep_pt)
 
 class RoleB(process):
-    def setup(S):
+    def setup(S, rounds):
         self.IKP_B, self.IK_B = X3DH.keygen()
         self.SKP_B, self.SPK_B = X3DH.keygen()
         self.onetime_private_prekeys = dict()
         self.oldSKP_B = None
         self.maxKeyID = 0
         self.state_B = EXT.state()
+        self.sessions = set()
 
     def generate_onetime_prekeys():
         onetime_public_prekeys = set()
@@ -97,8 +105,17 @@ class RoleB(process):
         SK = generate_shared_secret(IK_A, EPK_A, lbl)
         DR.RatchetInitBob(self.state_B, SK, self.SKP_B)
         AD = IK_A + X3DH.encode(IK_B)
+        self.sessions.add((A, AD))
         init_msg = DR.RatchetDecrypt(self.state_B, hdr, enc_msg, AD)
         output(init_msg)
+
+    def receive(msg=('msg', r, (msg_hdr, msg_ct)), from_ = A):
+        AD = {y for (x, y) in self.sessions if x == A}.pop()
+        msg_pt = DR.RatchetDecrypt(self.state_B, msg_hdr, msg_ct, AD)
+        output(msg_pt)
+        rep = 'This is reply ' + str(r)
+        send(('msg-rep', r, DR.RatchetEncrypt(self.state_B, rep, AD)), to = A)
+        
         
 class RoleS(process):
     def setup():
@@ -131,9 +148,10 @@ class RoleS(process):
             send(('reply', (IK_B, SPK_B, sig_B, (None, None))), to = A)
         
 def main():
+    rounds = int(sys.argv[1]) if len(sys.argv) > 1 else 10
     S = new(RoleS, ())
-    B = new(RoleB, (S,))
-    A = new(RoleA, (B, S))
+    B = new(RoleB, (S, rounds))
+    A = new(RoleA, (B, S, rounds))
     start(S)
     start(B)
     start(A)

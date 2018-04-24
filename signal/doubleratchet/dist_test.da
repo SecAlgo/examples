@@ -1,19 +1,18 @@
 import sys
 from sa.secalgoB import keygen
-from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PublicKey
+from nacl.signing import SigningKey, VerifyKey
+from nacl.encoding import HexEncoder
 import doubleratchet_ext as EXT
 import doubleratchet_lib as DR
 
 class roleA(process):
     def setup(B, rounds, SK, AD):
-        self.bob_init_pubk = None
         self.state = EXT.state()
         self.recv_set = set()
 
     def run():
         await(some(received(('pubk_init', pubk_bytes), from_ = B)))
-        self.bob_init_pubk = X25519PublicKey.from_public_bytes(pubk_bytes)
-        DR.RatchetInitAlice(self.state, self.SK, self.bob_init_pubk)
+        DR.RatchetInitAlice(self.state, self.SK, pubk_bytes)
         for r in range(rounds):
             msg = 'This is message ' + str(r)
             send(('msg', r, DR.RatchetEncrypt(self.state, msg, self.AD)), to = B)
@@ -36,7 +35,8 @@ class roleB(process):
     def run():
         self.bob_init_key_pair = EXT.GENERATE_DH()
         DR.RatchetInitBob(self.state, self.SK, self.bob_init_key_pair)
-        send(('pubk_init', self.bob_init_key_pair.public_key().public_bytes()), to = A)
+        send(('pubk_init',
+              self.bob_init_key_pair.verify_key.encode(encoder = HexEncoder)), to = A)
         await(self.recv_count == rounds)
 
     def receive(msg=('msg', r, (msg_header, msg_ct)), from_ = A):
