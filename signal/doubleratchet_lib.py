@@ -1,5 +1,3 @@
-from doubleratchet_ext import (MAX_SKIP, GENERATE_DH, DH, KDF_RK, KDF_CK,
-                               ENCRYPT, DECRYPT, HEADER, CONCAT)
 
 # Sources:
 # [1] - "The Double Ratchet Algorithm", Trevor Perrin, Moxie Marlinspike.

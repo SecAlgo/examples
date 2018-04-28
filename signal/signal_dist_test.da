@@ -1,14 +1,16 @@
 import sys
-import doubleratchet_lib as DR
-import doubleratchet_ext as EXT
+#import doubleratchet_lib as DR
+#import doubleratchet_ext as EXT
+from doubleratchet_ext import *
 import x3dh_lib as X3DH
+exec(open('./doubleratchet_lib.py', 'r').read())
 
 ONETIME_PREKEYS = 5
 
 class RoleA(process):
     def setup(B, S, rounds):
         self.IKP_A, self.IK_A = X3DH.keygen()
-        self.state_A = EXT.state()
+        self.state_A = state()
 
     def fetch_prekey_bundle(b, s):
         send(('request', b), to = s)
@@ -34,16 +36,16 @@ class RoleA(process):
         if verify_keybundle(IK_B, sig_B):
             SK, EPK_A = generate_shared_secret(IK_B, SPK_B, OPK_B)
             AD = X3DH.encode(self.IK_A) + IK_B
-            DR.RatchetInitAlice(self.state_A, SK, SPK_B[1:])
+            RatchetInitAlice(self.state_A, SK, SPK_B[1:])
             init_message = b'This is a secret'
             send(('init', (X3DH.encode(self.IK_A), X3DH.encode(EPK_A), lbl,
-                           DR.RatchetEncrypt(self.state_A, init_message, AD))), to = B)
+                           RatchetEncrypt(self.state_A, init_message, AD))), to = B)
             for r in range(rounds):
                 msg = 'This is message ' + str(r)
-                send(('msg', r, DR.RatchetEncrypt(self.state_A, msg, AD)), to = B)
+                send(('msg', r, RatchetEncrypt(self.state_A, msg, AD)), to = B)
                 await(some(received(('msg-rep', q, (rep_hdr, rep_ct)), from_ = _B),
                            has = (q >= r)))
-                rep_pt = DR.RatchetDecrypt(self.state_A, rep_hdr, rep_ct, AD)
+                rep_pt = RatchetDecrypt(self.state_A, rep_hdr, rep_ct, AD)
                 output(rep_pt)
 
 class RoleB(process):
@@ -53,7 +55,7 @@ class RoleB(process):
         self.onetime_private_prekeys = dict()
         self.oldSKP_B = None
         self.maxKeyID = 0
-        self.state_B = EXT.state()
+        self.state_B = state()
         self.sessions = set()
 
     def generate_onetime_prekeys():
@@ -103,18 +105,18 @@ class RoleB(process):
 
     def receive(msg=('init', (IK_A, EPK_A, lbl, (hdr, enc_msg))), from_ = A):
         SK = generate_shared_secret(IK_A, EPK_A, lbl)
-        DR.RatchetInitBob(self.state_B, SK, self.SKP_B)
+        RatchetInitBob(self.state_B, SK, self.SKP_B)
         AD = IK_A + X3DH.encode(IK_B)
         self.sessions.add((A, AD))
-        init_msg = DR.RatchetDecrypt(self.state_B, hdr, enc_msg, AD)
+        init_msg = RatchetDecrypt(self.state_B, hdr, enc_msg, AD)
         output(init_msg)
 
     def receive(msg=('msg', r, (msg_hdr, msg_ct)), from_ = A):
         AD = {y for (x, y) in self.sessions if x == A}.pop()
-        msg_pt = DR.RatchetDecrypt(self.state_B, msg_hdr, msg_ct, AD)
+        msg_pt = RatchetDecrypt(self.state_B, msg_hdr, msg_ct, AD)
         output(msg_pt)
         rep = 'This is reply ' + str(r)
-        send(('msg-rep', r, DR.RatchetEncrypt(self.state_B, rep, AD)), to = A)
+        send(('msg-rep', r, RatchetEncrypt(self.state_B, rep, AD)), to = A)
         
         
 class RoleS(process):

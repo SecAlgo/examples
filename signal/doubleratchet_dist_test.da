@@ -2,24 +2,26 @@ import sys
 from sa.secalgoB import keygen
 from nacl.signing import SigningKey, VerifyKey
 from nacl.encoding import HexEncoder
-import doubleratchet_ext as EXT
-import doubleratchet_lib as DR
+#import doubleratchet_ext as EXT
+#import doubleratchet_lib as DR
+from doubleratchet_ext import *
+exec(open('./doubleratchet_lib.py', 'r').read())
 
 class roleA(process):
     def setup(B, rounds, SK, AD):
-        self.state = EXT.state()
+        self.state = state()
         self.recv_set = set()
 
     def run():
         await(some(received(('pubk_init', pubk_bytes), from_ = B)))
-        DR.RatchetInitAlice(self.state, self.SK, pubk_bytes)
+        RatchetInitAlice(self.state, self.SK, pubk_bytes)
         for r in range(rounds):
             msg = 'This is message ' + str(r)
-            send(('msg', r, DR.RatchetEncrypt(self.state, msg, self.AD)), to = B)
+            send(('msg', r, RatchetEncrypt(self.state, msg, self.AD)), to = B)
             await(r in self.recv_set)
     
     def receive(msg=('rep', r, (msg_header, msg_ct)), from_ = B):
-        msg_pt = DR.RatchetDecrypt(self.state, msg_header, msg_ct, self.AD)
+        msg_pt = RatchetDecrypt(self.state, msg_header, msg_ct, self.AD)
         output(msg_pt)
         self.recv_set.add(r)
 
@@ -29,22 +31,22 @@ class roleA(process):
 class roleB(process):
     def setup(A, rounds, SK, AD):
         self.bob_init_key_pair = None
-        self.state = EXT.state()
+        self.state = state()
         self.recv_count = 0
               
     def run():
-        self.bob_init_key_pair = EXT.GENERATE_DH()
-        DR.RatchetInitBob(self.state, self.SK, self.bob_init_key_pair)
+        self.bob_init_key_pair = GENERATE_DH()
+        RatchetInitBob(self.state, self.SK, self.bob_init_key_pair)
         send(('pubk_init',
               self.bob_init_key_pair.verify_key.encode(encoder = HexEncoder)), to = A)
         await(self.recv_count == rounds)
 
     def receive(msg=('msg', r, (msg_header, msg_ct)), from_ = A):
-        msg_pt = DR.RatchetDecrypt(self.state, msg_header, msg_ct, self.AD)
+        msg_pt = RatchetDecrypt(self.state, msg_header, msg_ct, self.AD)
         output(msg_pt)
         self.recv_count += 1
         rep = 'This is reply ' + str(r)
-        send(('rep', r, DR.RatchetEncrypt(self.state, rep, self.AD)), to = A)
+        send(('rep', r, RatchetEncrypt(self.state, rep, self.AD)), to = A)
 
 def main():
     rounds = int(sys.argv[1]) if len(sys.argv) > 1 else 10
