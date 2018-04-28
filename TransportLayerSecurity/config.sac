@@ -1,1 +1,0 @@
-{"backend": "SA_PyCrypto", "verify_returns": "bool", "dh_grp": 14, "block_mode": "CBC", "sym_cipher": "AES", "dh_exp_size": 512, "dh_mod_size": 2048, "pub_cipher": "RSA", "benchmark": false, "mac_alg": "HMAC", "sym_key_size": {"DES": 64, "Blowfish": 448, "AES": 256, "DES3": 192}, "pub_key_size": 2048, "nonce_size": 128, "mac_key_size": 256, "hash_alg": "SHA-256"}

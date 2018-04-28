@@ -1,4 +1,5 @@
 # secalgo/examples/.gitignore
+*.sac
 *~
 *.pyc
 __pycache__/
