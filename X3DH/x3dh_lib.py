@@ -4,32 +4,40 @@ from nacl.public import Box
 from Cryptodome.Protocol.KDF import HKDF
 from Cryptodome.Hash import SHA256
 import sa.secalgoB as SA
+from sa.signal_timers import dec_timer
 
-X25519 = B'\0'
+X25519 = b'\0'
 
+@dec_timer
 def keygen():
     privk = SigningKey.generate()
     pubk = privk.verify_key
     return privk, pubk
 
+@dec_timer
 def encode(K):
     return X25519 + K.encode(encoder = HexEncoder)
 
+@dec_timer
 def decode(EK):
     return VerifyKey(EK[1:], encoder = HexEncoder)
 
+@dec_timer
 def dh(KP_L, PK_R):
     privk_L = KP_L.to_curve25519_private_key()
     pubk_R = PK_R.to_curve25519_public_key()
     box_LR = Box(privk_L, pubk_R)
     return box_LR.shared_key()
 
+@dec_timer
 def sign(KP, M):
     return KP.sign(M)
 
+@dec_timer
 def verify(PK, M):
     return PK.verify(M)
 
+@dec_timer
 def kdf(KM):
     F = b'\xff' * 32
     s = b'\0' * 32
@@ -37,6 +45,7 @@ def kdf(KM):
     return HKDF(KM, salt = s, key_len = 32,
                 hashmod = SHA256.new(), context = info)
 
+@dec_timer
 def encrypt(k, pt, ad):
     kd_out = HKDF(k, salt = (b'\0' * 32), key_len = 80,
                   hashmod = SHA256.new(), context = b'kdf_encrypt_info')
@@ -47,6 +56,7 @@ def encrypt(k, pt, ad):
     data, mac = SA.sign(ad + ct, key = auth_key)
     return ct + mac
 
+@dec_timer
 def decrypt(k, ct, ad):
     kd_out = HKDF(k, salt = (b'\0' * 32), key_len = 80,
                   hashmod = SHA256.new(), context = b'kdf_encrypt_info')
@@ -62,4 +72,3 @@ def decrypt(k, ct, ad):
         return SA.decrypt(ct_ct, key = enc_key)
     else:
         raise Exception
-    

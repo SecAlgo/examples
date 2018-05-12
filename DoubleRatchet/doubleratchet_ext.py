@@ -5,6 +5,7 @@ from nacl.public import Box
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.primitives import hashes
+from sa.signal_timers import dec_timer
 
 # Sources:
 # [1] - "The Double Ratchet Algorithm", Trevor Perrin, Moxie Marlinspike.
@@ -65,6 +66,7 @@ class Header():
 # From [1], p. 30:
 # This function is recommended to generate a key pair based on the Curve25519
 # or Curve448 elliptic curves. [1], p. 30.
+@dec_timer
 def GENERATE_DH():
     return SigningKey.generate()
 
@@ -77,6 +79,7 @@ def GENERATE_DH():
 # This function is recommended to return the output from the X25519 or X448
 # function as defined in RFC 7748. There is no need to check for invalid public
 # keys.
+@dec_timer
 def DH(dh_pair, dh_pub):
     dh_pairM = dh_pair.to_curve25519_private_key()
     dh_pubM = VerifyKey(dh_pub, encoder = HexEncoder).to_curve25519_public_key()
@@ -93,6 +96,7 @@ def DH(dh_pair, dh_pub):
 # and an application-specific byte sequence as HKDF "info". The "info" value
 # should be chosen to be distinct from other uses of HKDF in this
 #application.
+@dec_timer
 def KDF_RK(rk, dh_out):
     kd = HKDF(algorithm = hashes.SHA256(),
               length=64,
@@ -113,6 +117,7 @@ def KDF_RK(rk, dh_out):
 # using separate constants as input (e.g. a single byte 0x01 as input to
 # produce the message key, and a single byte 0x02 as input to produce the next
 # chain key.
+@dec_timer
 def KDF_CK(ck):
     mac_key = keygen('mac', key_mat = ck)
     chain_key = sign(b'\1', key = mac_key)[1]
@@ -144,6 +149,7 @@ def KDF_CK(ck):
 #  -HMAC is calculated using the authentication key and the same hash function
 #   as above. The HMAC input is the "associated_data" prepended to the
 #   ciphertext. The HMAC output is appended to the ciphertext.
+@dec_timer
 def ENCRYPT(mk, plaintext, associated_data):
     kd = HKDF(algorithm = hashes.SHA256(),
               length = 80,
@@ -162,6 +168,7 @@ def ENCRYPT(mk, plaintext, associated_data):
 # DECRYPT(mk, ciphertext, associated_data): Returns the AEAD decryption of
 # "ciphertext" with message key "mk". If authentication fails, as exception
 # will be raised that terminates processing.
+@dec_timer
 def DECRYPT(mk, ciphertext, associated_data):
     kd = HKDF(algorithm = hashes.SHA256(),
               length = 80,
@@ -187,6 +194,7 @@ def DECRYPT(mk, ciphertext, associated_data):
 # ratchet public key from the key pair in "dh_pair", the previous chain length
 # "pn", and the message number n. The returned header object contains ratchet
 # public key "dh", and integers "pn" and "n".
+@dec_timer
 def HEADER(dh_pair, pn, n):
     return Header(dh_pair, pn, n)
 
@@ -196,6 +204,7 @@ def HEADER(dh_pair, pn, n):
 # guaranteed to be a parsable byte sequence, a length value should be prepended
 # to the output to ensure that the output is parseable as a unique pair
 # ("ad", "header").
+@dec_timer
 def CONCAT(ad, header):
     pubk_as_bytes = header.dh
     # CMK: fixing the max value for pn and n as 65535 bytes

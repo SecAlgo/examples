@@ -13,13 +13,14 @@ class RoleA(process):
         if verify_keybundle(keybundle):
             SK, EKP_A = generate_shared_secret(keybundle)
             AD = encode(self.IK_A) + keybundle[0]
-            output(SK)
+            #output(SK)
             init_message = b'I am a secret'
             send(('init', (encode(self.IK_A), encode(EKP_A),
                            keybundle[3][0], encrypt(SK, init_message, AD))), to = B)
 
     def fetch_prekey_bundle(b):
         send(('request', b), to = S)
+        output("Send Request msg")
         await(some(received(('reply', keybundle_b), from_ = S)))
         return keybundle_b
 
@@ -38,16 +39,17 @@ class RoleA(process):
         return kdf(DHF), EPK_A
 
 class RoleB(process):
-    def setup(A, S):
+    def setup(S):
         self.IKP_B, self.IK_B = keygen()
         self.SKP_B, self.SPK_B = keygen()
         self.onetime_private_prekeys = dict()
         self.oldSKP_B = None
         self.maxKeyID = 0
+        self.end = False
         
     def run():
         publish_keys()
-        await(False)
+        await(self.end)
 
     def update_signed_prekey():
         self.oldSKP_B = self.SKP_B
@@ -64,6 +66,7 @@ class RoleB(process):
         
     def publish_keys():
         onetime_prekeys = generate_onetime_prekeys()
+        output("Send Publish Keys msg")
         send(('publish', (encode(self.IK_B), encode(self.SPK_B),
                           sign(self.IKP_B, encode(self.SPK_B)),
                           onetime_prekeys)), to = S)
@@ -79,32 +82,35 @@ class RoleB(process):
 
     def receive(msg=('init', initBundle), from_ = A):
         SK = generate_shared_secret(initBundle)
-        output(SK)
+        #output(SK)
         AD = initBundle[0] + encode(self.IK_B)
         init_message = decrypt(SK, initBundle[3], AD)
         output(init_message)
+        self.end = True
 
 class RoleS(process):
     def setup():
         self.keybundles = dict()
+        self.end = False
 
     def run():
-        await(False)
+        await(self.end)
 
     def receive(msg=('publish', keybundle), from_ = B):
+        output("Received Publish keys msg")
         self.keybundles[B] = keybundle
 
     def receive(msg=('request', B), from_ = A):
+        await(some(received(('publish', _), from_ = _B)))
+        output("Received Request msg")
         IK_B, SPK_B, sig_B, onetime_prekeys_B = self.keybundles[B]
         send(('reply', (IK_B, SPK_B, sig_B, onetime_prekeys_B.pop())), to = A)
+        self.end = True
     
 def main():
-    S = new(RoleS)
-    B = new(RoleB)
-    A = new(RoleA)
-    setup(S, ())
-    setup(B, (A, S))
-    setup(A, (B, S))
+    S = new(RoleS, ())
+    B = new(RoleB, (S,))
+    A = new(RoleA, (B, S))
     start(S)
     start(B)
     start(A)

@@ -9,8 +9,9 @@ ONETIME_PREKEYS = 5
 
 class RoleA(process):
     def setup(B, S, rounds):
-        self.IKP_A, self.IK_A = X3DH.keygen()
-        self.state_A = state()
+        self.IKP_A = None
+        self.IK_A = None
+        self.state_A = None
 
     def fetch_prekey_bundle(b, s):
         send(('request', b), to = s)
@@ -32,6 +33,8 @@ class RoleA(process):
         return X3DH.kdf(DHF), EPK_A
         
     def run():
+        self.IKP_A, self.IK_A = X3DH.keygen()
+        self.state_A = state()
         IK_B, SPK_B, sig_B, (lbl, OPK_B) = fetch_prekey_bundle(B, S)
         if verify_keybundle(IK_B, sig_B):
             SK, EPK_A = generate_shared_secret(IK_B, SPK_B, OPK_B)
@@ -50,13 +53,15 @@ class RoleA(process):
 
 class RoleB(process):
     def setup(S, rounds):
-        self.IKP_B, self.IK_B = X3DH.keygen()
-        self.SKP_B, self.SPK_B = X3DH.keygen()
-        self.onetime_private_prekeys = dict()
+        self.IKP_B = None
+        self.IK_B = None
+        self.SKP_B = None
+        self.SPK_B = None
+        self.onetime_private_prekeys = None
         self.oldSKP_B = None
-        self.maxKeyID = 0
-        self.state_B = state()
-        self.sessions = set()
+        self.maxKeyID = None
+        self.state_B = None
+        self.sessions = None
 
     def generate_onetime_prekeys():
         onetime_public_prekeys = set()
@@ -97,6 +102,13 @@ class RoleB(process):
         return X3DH.kdf(DHF)
         
     def run():
+        self.IKP_B, self.IK_B = X3DH.keygen()
+        self.SKP_B, self.SPK_B = X3DH.keygen()
+        self.onetime_private_prekeys = dict()
+        self.oldSKP_B = None
+        self.maxKeyID = 0
+        self.state_B = state()
+        self.sessions = set()
         publish_keys()
         await(False)
 
