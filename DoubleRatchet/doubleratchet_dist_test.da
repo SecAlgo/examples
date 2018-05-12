@@ -5,7 +5,7 @@ from nacl.encoding import HexEncoder
 #import doubleratchet_ext as EXT
 #import doubleratchet_lib as DR
 from doubleratchet_ext import *
-exec(open('/home/christopher/secalgo-org/examples/signal/doubleratchet_lib.py', 'r').read())
+exec(open('/home/christopher/secalgo-org/examples/DoubleRatchet/doubleratchet_lib.py', 'r').read())
 
 class roleA(process):
     def setup(B, rounds, SK, AD):
