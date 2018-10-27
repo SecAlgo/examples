@@ -1,0 +1,39 @@
+from sa.secalgo import *
+
+class roleA (process):
+    def setup(skA, B, pkB): pass
+    def run():
+        k = keygen()
+        send((1, encrypt(sign(k, skA), pkB)), to= B)
+        await some(received((2, m), from_= _B))
+        s = decrypt(m, k)
+        output('Decrypted secrete message:', s)
+
+class roleB (process):
+    def setup(skB, pkA): self.s = 'secret'
+    def run(): await(False)
+    def receive(msg=(1, m), from_= A):
+        k = verify(decrypt(m, skB), pkA)
+        send((2, encrypt(s, k)), to= A)
+
+def main():
+    skA, pkA = keygen('public')
+    skB, pkB = keygen('public')
+    B = new(roleB, (skB, pkA))
+    A = new(roleA, (skA, B, pkB))
+    start(B)
+    start(A)
+
+# This is an implementation, using DistAlgo plus SecAlgo, of the
+# Denning-Sacco key distribution protocol simplified, as described in
+# Bruno Blanchett (2012). "Security Protocol Verification:
+# Symbolic and Computational Models". ETAPS 2012 Invited Talk.
+# Slide 6. http://cs.ioc.ee/etaps12/invited/blanchet-slides.pdf
+# 
+# (1) A -> B: enc(sign(k, skA), pkB)
+# (2) B -> A: enc(s, k)
+#
+# The complete protocol has an authentication server that
+# stores and distributes users' public kyes, as described in
+# Dorothy Denning and Giovanni Sacco (1981). "Timestamps in Key 
+# Distribution Protocols". Communications of the ACM, 24(8):533-536.
